@@ -28,7 +28,7 @@ def merge(input_folder, output_file):
     f_out = h5py.File(output_file, "w").close()
     f_out = h5py.File(output_file, "w")
     for key in metadata:
-        f_out.create_dataset(key, metadata[key][0], dtype=metadata[key][1])
+        f_out.create_dataset(key, metadata[key][0], maxshape=(None, *(metadata[key][0][1:])), dtype=metadata[key][1])
     for f in input_files:
         with h5py.File(os.path.join(input_folder, f), "r") as f_in:
             for key in metadata:

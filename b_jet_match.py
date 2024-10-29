@@ -16,9 +16,10 @@ def get_final_h_index(pid, d1):
     for j in range(len(pid)):
         if pid[j] == 25:
             h = j
-            while pid[d1[h]] == 25:
+            while d1[h] > h and pid[d1[h]] == 25:
                 h = d1[h]
-            final_h_index.add(h)
+            if pid[d1[h]] != 25:
+                final_h_index.add(h)
 
     return list(final_h_index)
 

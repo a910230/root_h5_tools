@@ -2,8 +2,8 @@ import sys
 import h5py
 import numpy as np
 from utils import get_momentum, get_mass, choose_from_six
-from itertools import combinations
-from atpbar import atpbar
+# from itertools import combinations
+# from atpbar import atpbar
 
 
 
@@ -94,22 +94,16 @@ def get_match_answer(file): # no sort
     return ans
 
 def sort_b_jet_index(row):
-    row[row==-1] = 16
     arr = row.reshape(3, 2)
     arr.sort(axis=1)
     arr.view("i8, i8").sort(order=["f1"], axis=0)
-    arg = np.where(arr[:,1] == 16)[0]
-    arg = arg[0] if arg.size else 3
-    arr[:arg].view("i8, i8").sort(order=["f0"], axis=0)
-    arr[arg:].view("i8, i8").sort(order=["f0"], axis=0)
-    row[row==16] = -1
-    return
+    return 
 
 def compare_ans(guess, ans):
-    guess[0: 2].sort()
-    guess[2: 4].sort()
-    guess[4: 6].sort()
-    return np.array_equal(guess, ans)
+    sort_b_jet_index(guess)
+    sort_b_jet_index(ans)
+    compare = (guess == ans).reshape(3, 2).all(axis=1).sum()
+    return compare
 
 def chi(file, start=0, batch=0):
     pt, eta, phi, m, jet_mask, b_tag = get_jet_data(file)
@@ -148,76 +142,99 @@ def chi(file, start=0, batch=0):
     b_tag = b_tag[matchable] & jet_mask
 
     nbj = b_tag.sum(axis=1)
+    nj = jet_mask.sum(axis=1)
 
     total = matchable.sum()
     total_4b = (nbj == 4).sum()
     total_5b = (nbj == 5).sum()
-    total_6b = (nbj == 6).sum()
-    total_7b = (nbj >= 7).sum()
+    total_6b = (nbj >= 6).sum()
+    total_6j = (nj == 6).sum()
+    total_7j = (nj == 7).sum()
+    total_8j = (nj >= 8).sum()
     matched = 0
-    matched_4b = 0
-    matched_5b = 0
-    matched_6b = 0
-    matched_7b = 0
+    matched_456b = np.zeros((3, 4), dtype="<i8")
+    matched_678j = np.zeros((3, 4), dtype="<i8")
 
     
     six_combinations = choose_from_six()
+
     for i in range(total):
-        if nbj[i] > 6:
+        guess = []
+        if nbj[i] >= 6:
             for j in range(MAX_JETS):
                 if b_tag[i, j]:
                     guess.append(j)
                     if len(guess) == 6:
                         break
-        guess = []
-        budget = 6 - nbj[i]
-        for j in range(MAX_JETS):
-            if b_tag[i, j]:
-                guess.append(j)
-            elif budget > 0:
-                budget -= 1
-                guess.append(j)
+        else:
+            budget = 6 - nbj[i]
+            for j in range(MAX_JETS):
+                if b_tag[i, j]:
+                    guess.append(j)
+                    if len(guess) == 6:
+                        break
+                elif budget > 0:
+                    budget -= 1
+                    guess.append(j)
+                    if len(guess) == 6:
+                        break
 
         diff_min = 1E+8
         ind_min = np.ndarray((6,), dtype="<i8")
         for c in six_combinations:
-            jets = np.take(guess, c)
+            jets = np.take(guess, c) # = guess[c]
             p = get_momentum(np.take(pt[i], jets), np.take(eta[i], jets), np.take(phi[i], jets), np.take(m[i], jets))
             q = p.reshape(3, 2, 4).sum(axis=1)
-            diff = np.abs(get_mass(q) - M).sum()
+            # diff = np.abs(get_mass(q) - M).sum() 
+            diff = ((get_mass(q) - M) ** 2).sum()
             if diff < diff_min:
                 diff_min = diff
                 ind_min = jets
                     
-        if compare_ans(ind_min, match_ans[i]):
+        score = compare_ans(ind_min, match_ans[i])
+        if score > 0:
             matched += 1
-            if nbj[i] == 4:
-                matched_4b += 1
-            elif nbj[i] == 5:
-                matched_5b += 1
-            elif nbj[i] == 6:
-                matched_6b += 1
-            else:
-                matched_7b += 1
+        matched_456b[min(nbj[i] - 4, 2), score] += 1
+        matched_678j[min(nj[i] - 6, 2), score] += 1
 
 
+    np.set_printoptions(precision=3)
     print("File length", matchable.shape[0])
     print("Total:", total)
     print("Matched:", matched)
+
     print("Total 4b:", total_4b)
-    print("Matched 4b:", matched_4b)
     print("Total 5b:", total_5b)
-    print("Matched 5b:", matched_5b)
-    print("Total 6b:", total_6b)
-    print("Matched 6b:", matched_6b)
-    print("Total 7b:", total_7b)
-    print("Matched 7b:", matched_7b)
+    print("Total >=6b:", total_6b)
+    print("Matched 456b:")
+    print(matched_456b.sum(axis=0)[:,np.newaxis].shape)
+    matched_456b = np.concatenate((matched_456b, matched_456b.sum(axis=0)[np.newaxis,:]))
+    print(matched_456b)
+    print("Matched 456b effeciency:")
+    matched_456b_effciency = matched_456b[:,::-1] / np.array([total_4b, total_5b, total_6b, total])[:,np.newaxis]
+    print(matched_456b_effciency)
+    print("Higgs effeciency:")
+    print((matched_456b_effciency * np.array([3, 2, 1, 0])[np.newaxis,:]).sum(axis=1) / 3)
+    
+
+    print("Total 6j:", total_6j)
+    print("Total 7j:", total_7j)
+    print("Total >=8j:", total_8j)
+    print("Matched 678j:")
+    print(matched_678j.sum(axis=0)[:,np.newaxis].shape)
+    matched_678j = np.concatenate((matched_678j, matched_678j.sum(axis=0)[np.newaxis,:]))
+    print(matched_678j)
+    print("Matched 678j effeciency:")
+    matched_678j_effciency = matched_678j[:,::-1] / np.array([total_6j, total_7j, total_8j, total])[:,np.newaxis]
+    print(matched_678j_effciency)
+    print("Higgs effeciency:")
+    print((matched_678j_effciency * np.array([3, 2, 1, 0])[np.newaxis,:]).sum(axis=1) / 3)
     
 
 if __name__ == '__main__':
     # M = (119, 115, 111) or (120, 115, 110)
     MAX_JETS = 15
-    M = np.array((119, 115, 111))
+    M = np.array((125, 125, 125))
     h5_file = sys.argv[1]
     if len(sys.argv) == 2:
         chi(h5_file)
