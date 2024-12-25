@@ -196,8 +196,8 @@ def chi(file, start=0, batch=0):
             jets = np.take(guess, c) # = guess[c]
             p = get_momentum(np.take(pt[i], jets), np.take(eta[i], jets), np.take(phi[i], jets), np.take(m[i], jets))
             q = p.reshape(3, 2, 4).sum(axis=1)
-            # diff = np.abs(get_mass(q) - M).sum() 
-            diff = ((get_mass(q) - M) ** 2).sum()
+            diff = np.abs(get_mass(q) - M).sum() 
+            # diff = ((get_mass(q) - M) ** 2).sum()
             if diff < diff_min:
                 diff_min = diff
                 ind_min = jets
@@ -252,7 +252,7 @@ def chi(file, start=0, batch=0):
 if __name__ == '__main__':
     # M = (119, 115, 111) or (120, 115, 110)
     MAX_JETS = 15
-    M = np.array((125, 125, 125))
+    M = np.array((118.37, 114.86, 110.86))
     h5_file = sys.argv[1]
     if len(sys.argv) == 2:
         chi(h5_file)
